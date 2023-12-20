@@ -1,0 +1,16 @@
+<html>
+    <head>
+        <!-- note to self: vendor the daisy and htmx especially -->
+        <link href="/assets/stylesheets/application.css" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@2.6.0/dist/full.css" rel="stylesheet" type ="text/css" />
+        <script src="https://unpkg.com/htmx.org@1.9.9" integrity="sha384-QFjmbokDn2DjBjq+fM+8LUIVrAgqcNW2s0PjAxHETgRn9l4fvX31ZxDxvwQnyMOX" crossorigin="anonymous"></script>
+    </head>
+
+    <body>
+        <header class="navbar bg-gray-650 text-blue-500">
+            Hello, world
+        </header>
+
+        {{ template "content" . }}
+    </body>
+</html>
