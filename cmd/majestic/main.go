@@ -1,13 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"net"
 	"net/http"
-	"os"
+	"strings"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,10 +35,34 @@ func mustCreateLogger(level, encoding string) *zap.Logger {
 
 type Renderer struct {
 	l         *zap.Logger
-	templates map[string]template.Template
+	templates map[string]*template.Template
+}
+
+func (t *Renderer) AddPage(templ string) error {
+	tt, err := template.ParseGlob("views/" + templ)
+	if err != nil {
+		panic(err)
+	}
+	tt, err = tt.New(templ).ParseFiles("views/htmx.layout.html")
+	if err != nil {
+		panic(err)
+	}
+	t.templates[templ] = tt
+	fullTempl := "full-" + templ
+	ft, err := tt.New(fullTempl).ParseFiles("views/application.layout.html")
+	if err != nil {
+		panic(err)
+	}
+
+	t.templates[fullTempl] = ft
+	return nil
 }
 
 func (ren *Renderer) Render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+	// if this view doesn't exist try adding it first
+	if _, ok := ren.templates[name]; !ok {
+		ren.AddPage(name)
+	}
 	if r.Header.Get("HX-Request") == "true" {
 		templ, ok := ren.templates[name]
 		if !ok {
@@ -68,22 +97,46 @@ func (ren *Renderer) Render(w http.ResponseWriter, r *http.Request, name string,
 	}
 }
 
+var k = koanf.New(".")
+
+func LoadConfigs() error {
+	if err := k.Load(file.Provider("./config.yaml"), yaml.Parser()); err != nil {
+		return err
+	}
+
+	k.Load(env.Provider("CONTACTS_", ".", func(s string) string {
+		return strings.Replace(strings.ToLower(
+			strings.TrimPrefix(s, "CONTACTS_")), "_", ".", -1)
+	}), nil)
+
+	return nil
+}
+
 func main() {
-	l := mustCreateLogger(os.Getenv("LOG_LEVEL"), os.Getenv("LOG_ENCODING"))
-	renderer := &Renderer{l: l, templates: make(map[string]template.Template)}
+	if err := LoadConfigs(); err != nil {
+		panic(err)
+	}
+
+	l := mustCreateLogger(k.String("contacts.log_level"), k.String("contacts.log_encoding"))
+	renderer := &Renderer{l: l, templates: make(map[string]*template.Template)}
+	fmt.Println(renderer)
 	r := chi.NewRouter()
 	r.Use(middleware.Compress(5))
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		renderer.Render(w, r, "testy", nil)
-		w.Write([]byte("I hear xhtml is pretty based"))
+		http.Redirect(w, r, "/contacts", http.StatusPermanentRedirect)
+		//		renderer.Render(w, r, "contacts/index.html", nil)
+	})
+
+	r.Get("/contacts", func(w http.ResponseWriter, r *http.Request) {
+		renderer.Render(w, r, "contacts/index.html", nil)
 	})
 
 	srv := &http.Server{
-		Addr:    net.JoinHostPort(os.Getenv("HOST"), os.Getenv("PORT")),
+		Addr:    net.JoinHostPort(k.String("contacts.host"), k.String("contacts.port")),
 		Handler: r,
 	}
 
-	l.Info("starting server", zap.String("host", os.Getenv("HOST")), zap.String("port", os.Getenv("PORT")))
+	l.Info("starting server", zap.String("host", k.String("contacts.host")), zap.String("port", k.String("contacts.port")))
 
 	err := srv.ListenAndServe()
 	if err != nil {
