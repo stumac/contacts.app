@@ -1,0 +1,9 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "data/queries"
+    schema: "data/migrations"
+    gen:
+      go:
+        package: "data"
+        out: "data/contacts"

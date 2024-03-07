@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"database/sql"
 	"html/template"
 	"net"
 	"net/http"
@@ -13,6 +13,7 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	data "github.com/stumac/contacts/data/contacts"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -118,8 +119,18 @@ func main() {
 	}
 
 	l := mustCreateLogger(k.String("contacts.log_level"), k.String("contacts.log_encoding"))
+
+	l.Info("creating db", zap.String("driver", k.String("contacts.db.driver")), zap.String("connection", k.String("contacts.db.connection")))
+
+	db, err := sql.Open(k.String("contacts.db.driver"), k.String("contacts.db.connection"))
+	if err != nil {
+		panic(err)
+	}
+
+	queries := data.New(db)
+
 	renderer := &Renderer{l: l, templates: make(map[string]*template.Template)}
-	fmt.Println(renderer)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Compress(5))
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -128,7 +139,22 @@ func main() {
 	})
 
 	r.Get("/contacts", func(w http.ResponseWriter, r *http.Request) {
-		renderer.Render(w, r, "contacts/index.html", nil)
+		search := r.URL.Query().Get("name")
+		contacts := []data.Contact{}
+		if search != "" {
+			contacts, err = queries.ListContacts(r.Context())
+			if err != nil {
+				w.WriteHeader(400)
+				return
+			}
+		} else {
+			contacts, err = queries.ListContacts(r.Context())
+			if err != nil {
+				w.WriteHeader(400)
+				return
+			}
+		}
+		renderer.Render(w, r, "contacts/index.html", contacts)
 	})
 
 	srv := &http.Server{
@@ -138,7 +164,7 @@ func main() {
 
 	l.Info("starting server", zap.String("host", k.String("contacts.host")), zap.String("port", k.String("contacts.port")))
 
-	err := srv.ListenAndServe()
+	err = srv.ListenAndServe()
 	if err != nil {
 		l.Error("error listening", zap.Error(err))
 	}

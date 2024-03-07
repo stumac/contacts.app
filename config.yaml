@@ -3,3 +3,6 @@ contacts:
   port: 42069
   log_level: DEBUG
   log_encoding: console
+  db:
+    driver: "sqlite"
+    connection: "./contacts.db"

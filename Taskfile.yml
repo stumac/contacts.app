@@ -1,0 +1,22 @@
+version: '3'
+
+includes:
+  db: tasks/db.yaml
+
+tasks:
+  run:
+    aliases: [r]
+    cmds:
+      - go build -o contacts ./cmd/majestic
+      - ./contacts
+  test:
+    aliases: [t]
+    cmds:
+      - go test ./...
+  # new-migration:
+  #   dir: data/migrations
+  #   aliases: [migration]
+  #   requires:
+  #     vars: [name]
+  #   cmds:
+  #     - goose create {{.name}} sql

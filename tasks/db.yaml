@@ -1,0 +1,20 @@
+version: '3'
+
+tasks:
+  migrate:
+    cmds:
+      - goose -dir data/migrations sqlite3 ./contacts.db up
+  rollback:
+    cmds:
+      -  goose -dir data/migrations sqlite3 ./contacts.db down
+  new-migration:
+    dir: data/migrations
+    aliases: [migration]
+    requires:
+      vars: [name]
+    cmds:
+      - goose create {{.name}} sql
+  generate-sql:
+    aliases: [gen, generate]
+    cmds:
+      - sqlc generate
